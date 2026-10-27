@@ -130,7 +130,9 @@ export default async function handler(req, res) {
 
   for (const modelo of modelos) {
     try {
-      const { status, datos } = await llamarGemini(modelo, clave, cuerpo);
+      // Razonamiento bajo para responder más rápido; si el modelo no acepta el parámetro, se reintenta sin él.
+      let { status, datos } = await llamarGemini(modelo, clave, { ...cuerpo, generationConfig: { ...cuerpo.generationConfig, thinkingConfig: { thinkingLevel: 'low' } } });
+      if (status === 400 && /thinking/i.test(datos?.error?.message || '')) ({ status, datos } = await llamarGemini(modelo, clave, cuerpo));
       if (status === 200) {
         const cand = datos.candidates?.[0];
         const txt = cand?.content?.parts?.map((p) => p.text || '').join('') || '';
