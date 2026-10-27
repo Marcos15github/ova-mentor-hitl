@@ -3,7 +3,8 @@
 // nunca llega al navegador del estudiante.
 import { PROMPT_ROCAS, ESQUEMA_RESPUESTA, instruccionAccion, bloqueContexto, enmascararDatos } from '../lib/prompt.js';
 
-const MODELOS_RESPALDO = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+// Orden: los dos primeros compiten en paralelo; el resto es respaldo secuencial.
+const MODELOS_RESPALDO = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
 const ACCIONES = new Set(['mensaje', 'pista', 'evidencia', 'revisar_avance', 'cierre_iteracion', 'consultar_recursos']);
 const MIME_IMAGEN = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const LIMITE_POR_MINUTO = 20;
@@ -67,7 +68,9 @@ function normalizar(obj) {
     principio_mayer: n(obj.principio_mayer, 'ninguno'),
     criterio_rubrica: Math.max(0, Math.min(9, parseInt(n(obj.criterio_rubrica, 0), 10) || 0)),
     fuente: n(obj.fuente, 'ninguna'),
-    requiere_validacion_humana: Boolean(obj.requiere_validacion_humana),
+    // Solo se pide validación humana cuando se revisa contenido concreto, no al diagnosticar o dar pistas.
+    requiere_validacion_humana: Boolean(obj.requiere_validacion_humana) &&
+      !['diagnostico', 'pista', 'pregunta_socratica', 'fuera_de_alcance', 'escalamiento'].includes(obj.tipo_intervencion),
     escalar_docente: Boolean(obj.escalar_docente),
     hallazgo_sugerido: n(obj.hallazgo_sugerido, 'NA'),
     siguiente_paso: String(n(obj.siguiente_paso, '')).trim()
@@ -125,37 +128,57 @@ export default async function handler(req, res) {
   const modelos = [process.env.GEMINI_MODEL, ...MODELOS_RESPALDO].filter(Boolean)
     .filter((m, i, a) => a.indexOf(m) === i);
   const inicio = Date.now();
-  let ultimoError = 'Sin respuesta del modelo.';
-  const intentos = [];
-
   const PRESUPUESTO_MS = 52_000; // la función tiene 60 s como máximo en Vercel
-  for (const modelo of modelos) {
-    const restante = PRESUPUESTO_MS - (Date.now() - inicio);
-    if (restante < 4_000) { ultimoError = 'Se agotó el tiempo de espera de los modelos.'; break; }
-    const limite = Math.min(22_000, restante);
+  const intentos = [];
+  const restante = () => PRESUPUESTO_MS - (Date.now() - inicio);
+
+  // Intenta un modelo; resuelve con la respuesta normalizada o rechaza con el motivo.
+  async function intentar(modelo, limite) {
+    const conRazonamientoBajo = { ...cuerpo, generationConfig: { ...cuerpo.generationConfig, thinkingConfig: { thinkingLevel: 'low' } } };
+    let r;
     try {
-      // Razonamiento bajo para responder más rápido; si el modelo no acepta el parámetro, se reintenta sin él.
-      let { status, datos } = await llamarGemini(modelo, clave, { ...cuerpo, generationConfig: { ...cuerpo.generationConfig, thinkingConfig: { thinkingLevel: 'low' } } }, limite);
-      if (status === 400 && /thinking/i.test(datos?.error?.message || '')) ({ status, datos } = await llamarGemini(modelo, clave, cuerpo, PRESUPUESTO_MS - (Date.now() - inicio)));
-      if (status === 200) {
-        const cand = datos.candidates?.[0];
-        const txt = cand?.content?.parts?.map((p) => p.text || '').join('') || '';
-        if (!txt) {
-          ultimoError = cand?.finishReason === 'SAFETY'
-            ? 'El modelo bloqueó la respuesta por seguridad.' : 'El modelo devolvió una respuesta vacía.';
-          continue;
-        }
-        const data = normalizar(extraerJSON(txt));
-        if (!data.respuesta) { ultimoError = 'Respuesta sin contenido.'; continue; }
-        return res.status(200).json({ ok: true, data, modelo, ms: Date.now() - inicio, intentos });
-      }
-      ultimoError = datos?.error?.message || `Error ${status}`;
-      intentos.push({ modelo, status, motivo: String(datos?.error?.status || '').slice(0, 40) });
-      // 400 de esquema/parámetro, 404 modelo inexistente, 429 cuota, 5xx: se intenta el siguiente.
-      if (status === 401 || status === 403) break;
+      r = await llamarGemini(modelo, clave, conRazonamientoBajo, limite);
+      if (r.status === 400 && /thinking/i.test(r.datos?.error?.message || '')) r = await llamarGemini(modelo, clave, cuerpo, Math.min(limite, restante()));
     } catch (e) {
-      ultimoError = e.name === 'AbortError' ? 'El modelo tardó demasiado en responder.' : e.message;
-      intentos.push({ modelo, status: 0, motivo: e.name === 'AbortError' ? 'TIEMPO' : 'RED' });
+      const motivo = e.name === 'AbortError' ? 'TIEMPO' : 'RED';
+      intentos.push({ modelo, status: 0, motivo });
+      throw new Error(motivo === 'TIEMPO' ? 'El modelo tardó demasiado en responder.' : e.message);
+    }
+    if (r.status !== 200) {
+      intentos.push({ modelo, status: r.status, motivo: String(r.datos?.error?.status || '').slice(0, 40) });
+      const err = new Error(r.datos?.error?.message || `Error ${r.status}`);
+      err.fatal = r.status === 401 || r.status === 403;
+      throw err;
+    }
+    const cand = r.datos.candidates?.[0];
+    const txt = cand?.content?.parts?.map((p) => p.text || '').join('') || '';
+    const data = txt ? normalizar(extraerJSON(txt)) : null;
+    if (!data?.respuesta) {
+      intentos.push({ modelo, status: 200, motivo: cand?.finishReason || 'VACIA' });
+      throw new Error(cand?.finishReason === 'SAFETY' ? 'El modelo bloqueó la respuesta por seguridad.' : 'El modelo devolvió una respuesta vacía.');
+    }
+    return { data, modelo };
+  }
+
+  let ultimoError = 'Sin respuesta del modelo.';
+  // 1) Los dos primeros modelos compiten en paralelo: gana la primera respuesta válida.
+  try {
+    const { data, modelo } = await Promise.any(modelos.slice(0, 2).map((m) => intentar(m, Math.min(24_000, restante()))));
+    return res.status(200).json({ ok: true, data, modelo, ms: Date.now() - inicio, intentos });
+  } catch (agg) {
+    const errores = agg.errors || [agg];
+    ultimoError = errores.at(-1)?.message || ultimoError;
+    if (errores.some((e) => e.fatal)) return res.status(502).json({ ok: false, code: 'CLAVE', error: 'La clave de Gemini no es válida o no tiene permisos.', intentos });
+  }
+  // 2) Respaldo secuencial con el tiempo que quede.
+  for (const modelo of modelos.slice(2)) {
+    if (restante() < 4_000) { ultimoError = 'Se agotó el tiempo de espera de los modelos.'; break; }
+    try {
+      const { data } = await intentar(modelo, Math.min(20_000, restante()));
+      return res.status(200).json({ ok: true, data, modelo, ms: Date.now() - inicio, intentos });
+    } catch (e) {
+      ultimoError = e.message;
+      if (e.fatal) break;
     }
   }
   return res.status(502).json({ ok: false, code: 'MODELO', error: ultimoError, intentos });

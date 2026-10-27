@@ -191,8 +191,8 @@ function pintarMensaje(m, vista = null) {
       if (m.demo) chips.push('<span class="chip demo" title="Respuesta predefinida, sin IA">Simulado</span>');
     }
     html += `<div class="msj-meta"><span>${autor} · ${horaCorta(m.ts)}</span>${chips.join('')}</div>`;
-    if (m.rol === 'agente' && meta.siguiente_paso) html += `<div class="siguiente-paso"><strong>Siguiente paso:</strong> ${escapar(meta.siguiente_paso)}</div>`;
-    if (m.rol === 'agente' && meta.requiere_validacion_humana) {
+    if (m.rol === 'agente' && meta.siguiente_paso && !/siguiente paso/i.test(m.texto)) html += `<div class="siguiente-paso"><strong>Siguiente paso:</strong> ${escapar(meta.siguiente_paso)}</div>`;
+    if (m.rol === 'agente' && meta.requiere_validacion_humana && !m.demo) {
       html += `<div class="msj-acciones"><button type="button" class="btn btn-sec btn-peq" data-registrar="${m.id}">Registrar mi decisión HITL</button></div>`;
     }
     li.innerHTML = html;
