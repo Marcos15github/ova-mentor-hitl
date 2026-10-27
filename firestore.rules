@@ -1,0 +1,22 @@
+rules_version = '2';
+// Reglas de seguridad de Firestore para OVA-Mentor HITL.
+// Cada estudiante (sesión anónima de Firebase Auth) solo puede leer y escribir su
+// propia sesión. Nadie puede listar sesiones ajenas desde el navegador; el equipo
+// investigador consulta los datos desde la consola de Firebase.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sesiones/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.size() < 40;
+      match /{coleccion}/{docId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if request.auth != null && request.auth.uid == uid
+          && coleccion in ['mensajes', 'bitacora', 'versiones'];
+      }
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

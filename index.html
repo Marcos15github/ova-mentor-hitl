@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OVA-Mentor HITL · Agente pedagógico inteligente</title>
+  <meta name="description" content="Agente pedagógico inteligente para el acompañamiento socrático y la evaluación formativa en la producción ágil de OVA con IA generativa y supervisión humana (HITL). MIETIA, Universidad de Córdoba.">
+  <meta name="theme-color" content="#00563B">
+  <link rel="icon" href="img/icono.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-sesion="no">
+  <a class="saltar" href="#entrada">Saltar al campo de respuesta</a>
+
+  <header class="cabecera" role="banner">
+    <div class="marca">
+      <img src="img/icono.svg" alt="" width="36" height="36">
+      <div>
+        <h1>OVA-Mentor HITL <span class="insignia-ia" title="Este agente es una inteligencia artificial">IA</span></h1>
+        <p class="subtitulo">Tutor socrático de diseño multimedia · MIETIA · Universidad de Córdoba</p>
+      </div>
+    </div>
+    <div class="cabecera-acciones">
+      <span id="estado-guardado" class="estado-guardado" role="status" aria-live="polite">Sin sesión</span>
+      <span id="estado-ia" class="estado-ia" hidden></span>
+      <button type="button" class="btn btn-sec" id="btn-exportar" disabled>Exportar</button>
+      <button type="button" class="btn btn-sec" id="btn-acerca" aria-haspopup="dialog">Acerca<span class="solo-escritorio">&nbsp;y privacidad</span></button>
+    </div>
+  </header>
+
+  <nav class="pestanas-movil" aria-label="Secciones">
+    <button type="button" data-pestana="chat" aria-pressed="true">Conversación</button>
+    <button type="button" data-pestana="progreso" aria-pressed="false">Progreso</button>
+    <button type="button" data-pestana="recursos" aria-pressed="false">Recursos</button>
+  </nav>
+
+  <main class="disposicion" id="principal">
+    <!-- ZONA CENTRAL: CONVERSACIÓN -->
+    <section class="zona-chat" data-zona="chat" aria-labelledby="titulo-chat">
+      <h2 id="titulo-chat" class="sr-only">Conversación con el agente</h2>
+
+      <div id="inicio" class="tarjeta-inicio">
+        <h2>Antes de empezar</h2>
+        <p>Soy <strong>OVA-Mentor HITL</strong>, una inteligencia artificial. Te acompaño mientras produces tu Objeto Virtual de Aprendizaje (OVA) con IA generativa: te hago preguntas, te doy pistas graduales y te retroalimento con la rúbrica del proyecto. <strong>No hago el OVA por ti, no califico y tu docente es la autoridad académica.</strong></p>
+        <form id="form-inicio" novalidate>
+          <div class="campo-doble">
+            <label>Seudónimo (no uses tu nombre real)
+              <input name="alias" required maxlength="30" autocomplete="off" placeholder="Ej.: Diseñador-07">
+            </label>
+            <label>Versión SAM2 actual
+              <select name="fase" required>
+                <option value="PREP">Savvy Start (Preparación)</option>
+                <option value="DIS">Versión Alfa</option>
+                <option value="DES-B">Versión Beta</option>
+                <option value="DES-O">Versión Oro</option>
+              </select>
+            </label>
+          </div>
+          <label>Tema del OVA
+            <input name="tema" required maxlength="120" placeholder="Ej.: Partes de la célula para primer semestre">
+          </label>
+          <label>Objetivo de aprendizaje
+            <textarea name="objetivo" required maxlength="400" rows="2" placeholder="Ej.: Que el estudiante identifique las organelas y explique su función"></textarea>
+          </label>
+          <label>Componente en el que trabajas ahora
+            <select name="componente" id="sel-componente"></select>
+          </label>
+          <fieldset class="consentimiento">
+            <legend>Uso responsable y tratamiento de datos</legend>
+            <p>Solo guardo tu seudónimo, los datos del OVA, la conversación y tu bitácora HITL, con fines formativos y de investigación del curso. No compartas nombres, documentos, teléfonos ni datos de estudiantes (Ley 1581 de 2012). Puedes exportar o borrar tus datos cuando quieras.</p>
+            <label class="check"><input type="checkbox" name="consent" required> Entiendo que hablo con una IA, que debo verificar sus sugerencias y acepto el tratamiento descrito.</label>
+          </fieldset>
+          <div class="fila-botones">
+            <button type="submit" class="btn btn-pri" id="btn-iniciar">Iniciar acompañamiento</button>
+            <button type="button" class="btn btn-sec" id="btn-continuar" hidden>Continuar sesión guardada</button>
+          </div>
+          <p id="error-inicio" class="error" role="alert" hidden></p>
+        </form>
+      </div>
+
+      <ol id="mensajes" class="mensajes" aria-live="polite" aria-relevant="additions" hidden></ol>
+
+      <div id="escribiendo" class="escribiendo" hidden role="status"><span></span><span></span><span></span> OVA-Mentor está pensando…</div>
+
+      <div id="aviso-docente" class="aviso-docente" role="alert" hidden>
+        <strong>Esta consulta corresponde a tu docente.</strong>
+        <span>El agente no puede resolverla. Prepara un mensaje con el contexto para enviarlo tú mismo.</span>
+        <button type="button" class="btn btn-sec btn-peq" id="btn-msj-docente">Preparar mensaje al docente</button>
+      </div>
+
+      <form id="entrada" class="entrada" hidden aria-label="Tu respuesta o evidencia">
+        <label for="texto" class="sr-only">Tu respuesta o evidencia</label>
+        <div id="adjunto-previo" class="adjunto-previo" hidden>
+          <img alt="Vista previa de la captura adjunta" id="adjunto-img">
+          <span id="adjunto-info"></span>
+          <button type="button" class="btn-icono" id="btn-quitar-adjunto" aria-label="Quitar captura adjunta">✕</button>
+        </div>
+        <textarea id="texto" rows="3" maxlength="4000" placeholder="Explica tu decisión de diseño, pega un fragmento de guion o describe tu pantalla…"></textarea>
+        <div class="barra-entrada">
+          <div class="izq">
+            <label class="btn btn-sec btn-peq" for="archivo">Adjuntar captura</label>
+            <input type="file" id="archivo" accept="image/png,image/jpeg,image/webp" class="sr-only">
+            <button type="button" class="btn btn-sec btn-peq" id="btn-pista" aria-describedby="nivel-pista">Solicitar pista</button>
+            <span id="nivel-pista" class="nivel-pista" aria-live="polite">Pistas: 0 de 3</span>
+          </div>
+          <div class="der">
+            <span class="ayuda-teclado">Ctrl + Enter para enviar</span>
+            <button type="submit" class="btn btn-pri" id="btn-enviar">Enviar respuesta</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- PANEL DERECHO -->
+    <aside class="panel-lateral" aria-label="Progreso y recursos">
+      <section class="tarjeta" data-zona="progreso" aria-labelledby="titulo-progreso">
+        <div class="tarjeta-cab">
+          <h2 id="titulo-progreso">Progreso del OVA</h2>
+          <span id="codigo-sesion" class="codigo-sesion" title="Código de sesión para referenciar con tu docente"></span>
+        </div>
+        <p id="ova-resumen" class="ova-resumen">Inicia una sesión para ver tu progreso.</p>
+        <ol id="fases" class="fases" aria-label="Versiones del modelo SAM2"></ol>
+        <dl class="indicadores">
+          <div><dt>Registros HITL</dt><dd id="ind-registros">0</dd></div>
+          <div><dt>Ajustes humanos</dt><dd id="ind-ajustes" title="(APM + ITE + DES) / total">—</dd></div>
+          <div><dt>Índice CTML de la versión</dt><dd id="ind-ctml" title="Promedio de los criterios 1 a 5 de la rúbrica F2-B">—</dd></div>
+          <div><dt>Minutos de revisión</dt><dd id="ind-minutos">0</dd></div>
+        </dl>
+        <div id="barra-decisiones" class="barra-decisiones" aria-hidden="true"></div>
+        <p id="leyenda-decisiones" class="leyenda"></p>
+        <div class="fila-botones">
+          <button type="button" class="btn btn-sec" id="btn-registrar" disabled>Registrar decisión HITL</button>
+          <button type="button" class="btn btn-sec" id="btn-avance" disabled>Revisar avance</button>
+        </div>
+      </section>
+
+      <section class="tarjeta" data-zona="recursos" aria-labelledby="titulo-recursos">
+        <div class="tarjeta-cab">
+          <h2 id="titulo-recursos">Recursos de apoyo</h2>
+          <button type="button" class="btn btn-sec btn-peq" id="btn-recursos" disabled>Consultar recursos</button>
+        </div>
+        <div class="acordeon" id="recursos"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="advertencia" role="contentinfo">
+    <strong>Soy una IA: verifica mis sugerencias y decide tú.</strong>
+    <span>No compartas datos personales. Tu docente es la autoridad académica; consulta con él lo que exceda al agente.</span>
+  </footer>
+
+  <!-- DIÁLOGOS -->
+  <dialog id="dlg-hitl" aria-labelledby="t-hitl">
+    <form method="dialog" id="form-hitl" class="dialogo">
+      <h2 id="t-hitl">Registrar decisión HITL (Matriz F2-A)</h2>
+      <p class="nota">Tú decides. El agente solo sugiere el hallazgo. Registra la interacción con la IA generativa que acabas de revisar.</p>
+      <div class="campo-doble">
+        <label>Identificador <input name="identificador" readonly></label>
+        <label>N.º de intento <input name="intento" type="number" min="1" value="1"></label>
+      </div>
+      <div class="campo-doble">
+        <label>Componente <select name="componente"></select></label>
+        <label>Agente tecnológico <select name="agente"></select></label>
+      </div>
+      <label>Propósito instruccional <input name="proposito" maxlength="200" required placeholder="¿Para qué usaste la IA?"></label>
+      <label>Instrucción de entrada (prompt) <textarea name="prompt" rows="2" maxlength="2000" placeholder="Copia el prompt exacto que usaste"></textarea></label>
+      <label class="check"><input type="checkbox" name="rocas"> El prompt usa la estructura ROCAS</label>
+      <label>Respuesta generada (síntesis) <textarea name="sintesis" rows="2" maxlength="600"></textarea></label>
+      <label>Auditoría y análisis crítico (HITL) <textarea name="auditoria" rows="3" maxlength="1000" required placeholder="¿Qué revisaste contra la fuente y contra los principios de Mayer?"></textarea></label>
+      <div class="campo-doble">
+        <label>Hallazgo HITL <select name="hallazgo"></select></label>
+        <label>Principio de Mayer comprometido <select name="principio"></select></label>
+      </div>
+      <fieldset>
+        <legend>Decisión pedagógica</legend>
+        <div class="opciones-decision" id="opciones-decision"></div>
+      </fieldset>
+      <div class="campo-doble">
+        <label>Minutos de revisión humana <input name="minutos" type="number" min="0" max="600" value="5"></label>
+        <label class="check check-borde"><input type="checkbox" name="fuentes"> Verifiqué fuentes y exactitud</label>
+      </div>
+      <p class="error" id="error-hitl" role="alert" hidden></p>
+      <div class="fila-botones fin">
+        <button value="cancel" class="btn btn-sec" formnovalidate>Cancelar</button>
+        <button value="ok" class="btn btn-pri" id="btn-guardar-hitl">Guardar en la bitácora</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-avance" aria-labelledby="t-avance">
+    <div class="dialogo dialogo-ancho">
+      <h2 id="t-avance">Revisar avance</h2>
+      <div class="pestanas" role="tablist" aria-label="Revisión de avance">
+        <button role="tab" aria-selected="true" aria-controls="tab-rubrica" id="tb-rubrica">Autoevaluación F2-B</button>
+        <button role="tab" aria-selected="false" aria-controls="tab-resumen" id="tb-resumen" tabindex="-1">Resumen de bitácora</button>
+        <button role="tab" aria-selected="false" aria-controls="tab-cierre" id="tb-cierre" tabindex="-1">Cerrar versión</button>
+      </div>
+      <div role="tabpanel" id="tab-rubrica" aria-labelledby="tb-rubrica">
+        <p class="nota">Valora tu versión actual con la rúbrica del proyecto. 4 = cumple plenamente · 3 = ajustes menores · 2 = requiere iterar · 1 = no cumple · NA = no aplica aún.</p>
+        <div id="tabla-rubrica" class="tabla-rubrica"></div>
+        <div id="resultado-rubrica" class="resultado-rubrica" aria-live="polite"></div>
+        <div class="fila-botones">
+          <button type="button" class="btn btn-sec" id="btn-guardar-rubrica">Guardar autoevaluación</button>
+          <button type="button" class="btn btn-pri" id="btn-pedir-revision">Pedir retroalimentación al agente</button>
+        </div>
+      </div>
+      <div role="tabpanel" id="tab-resumen" aria-labelledby="tb-resumen" hidden>
+        <p class="nota">Resumen por versión, con la misma estructura de la Matriz F2-A del proyecto.</p>
+        <div id="tabla-resumen" class="tabla-scroll"></div>
+      </div>
+      <div role="tabpanel" id="tab-cierre" aria-labelledby="tb-cierre" hidden>
+        <p class="nota">Para cerrar la versión responde la reflexión metacognitiva. El agente resumirá tus decisiones y propondrá el foco de la siguiente versión.</p>
+        <form id="form-reflexion"></form>
+        <p class="error" id="error-cierre" role="alert" hidden></p>
+        <div class="fila-botones">
+          <button type="button" class="btn btn-pri" id="btn-cerrar-version">Cerrar versión y avanzar</button>
+        </div>
+      </div>
+      <div class="fila-botones fin">
+        <button type="button" class="btn btn-sec" data-cerrar>Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-exportar" aria-labelledby="t-exportar">
+    <div class="dialogo">
+      <h2 id="t-exportar">Exportar y gestionar mis datos</h2>
+      <p class="nota">Descarga tu trazabilidad para entregarla a tu docente o anexarla a tu investigación.</p>
+      <div class="lista-botones">
+        <button type="button" class="btn btn-sec" id="exp-csv-bitacora">Bitácora HITL (CSV · Matriz F2-A)</button>
+        <button type="button" class="btn btn-sec" id="exp-csv-chat">Conversación (CSV)</button>
+        <button type="button" class="btn btn-pri" id="exp-pdf">Informe completo (PDF)</button>
+        <button type="button" class="btn btn-sec" id="exp-json">Copia de respaldo (JSON)</button>
+      </div>
+      <hr>
+      <h3>Derecho de supresión</h3>
+      <p class="nota">Borra la sesión de este navegador y de la base de datos en la nube. Esta acción no se puede deshacer.</p>
+      <button type="button" class="btn btn-peligro" id="btn-borrar">Borrar mis datos</button>
+      <div class="fila-botones fin">
+        <button type="button" class="btn btn-sec" data-cerrar>Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-acerca" aria-labelledby="t-acerca">
+    <div class="dialogo dialogo-ancho" id="contenido-acerca"></div>
+  </dialog>
+
+  <dialog id="dlg-privacidad" aria-labelledby="t-priv">
+    <div class="dialogo">
+      <h2 id="t-priv">Parece que incluiste un dato personal</h2>
+      <p>Detecté: <strong id="priv-detectado"></strong>. Para proteger tu privacidad y la de terceros, el agente no necesita esa información.</p>
+      <div class="fila-botones fin">
+        <button type="button" class="btn btn-sec" id="priv-editar">Volver y editar</button>
+        <button type="button" class="btn btn-pri" id="priv-enmascarar">Ocultar el dato y enviar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-docente" aria-labelledby="t-docente">
+    <div class="dialogo">
+      <h2 id="t-docente">Mensaje para tu docente</h2>
+      <p class="nota">El agente no envía mensajes. Copia este texto y envíalo tú por el canal del curso.</p>
+      <textarea id="txt-docente" rows="9"></textarea>
+      <div class="fila-botones fin">
+        <button type="button" class="btn btn-sec" data-cerrar>Cerrar</button>
+        <button type="button" class="btn btn-pri" id="btn-copiar-docente">Copiar texto</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="vendor/jspdf/jspdf.umd.min.js" defer></script>
+  <script src="vendor/jspdf/jspdf.plugin.autotable.min.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
