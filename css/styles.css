@@ -1,6 +1,10 @@
 /* OVA-Mentor HITL — Vibe Design: sobrio, académico y cercano.
    Neutros + un único acento (verde institucional) reservado para la acción
    principal y el estado actual del progreso. Meta: WCAG 2.1 AA. */
+/* Tipografía Atkinson Hyperlegible (diseñada para baja visión), alojada en el propio sitio. */
+@font-face { font-family: 'Atkinson Hyperlegible'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fonts/atkinson-hyperlegible-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Atkinson Hyperlegible'; font-style: italic; font-weight: 400; font-display: swap; src: url('../fonts/atkinson-hyperlegible-latin-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Atkinson Hyperlegible'; font-style: normal; font-weight: 700; font-display: swap; src: url('../fonts/atkinson-hyperlegible-latin-700-normal.woff2') format('woff2'); }
 :root {
   --fondo: #F5F6F4;
   --superficie: #FFFFFF;
