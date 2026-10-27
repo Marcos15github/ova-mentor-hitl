@@ -52,6 +52,7 @@ h3 { font-size: 1rem; }
 p { margin: 0 0 .75rem; }
 a { color: var(--acento); }
 :focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; border-radius: 4px; }
+.btn .solo-escritorio { margin-left: -.4rem; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .saltar { position: absolute; left: -999px; top: 0; background: var(--acento); color: var(--sobre-acento); padding: .5rem 1rem; z-index: 99; }
 .saltar:focus { left: 1rem; }
@@ -245,6 +246,12 @@ hr { border: 0; border-top: 1px solid var(--borde); margin: .5rem 0; }
   body[data-pestana="recursos"] [data-zona="chat"], body[data-pestana="recursos"] [data-zona="progreso"] { display: none; }
   .msj { max-width: 94%; }
   .ayuda-teclado { display: none; }
+  .entrada { padding: .6rem 12px .7rem; gap: .4rem; }
+  .entrada textarea { min-height: 52px; height: 52px; }
+  .barra-entrada { flex-wrap: nowrap; }
+  .barra-entrada .izq { flex-wrap: nowrap; gap: .35rem; }
+  .barra-entrada .btn { padding: .35rem .6rem; font-size: .84rem; min-height: 40px; }
+  .nivel-pista { display: none; }
 }
 @media (max-width: 560px) {
   .cabecera { padding: .6rem 16px; gap: .5rem; }

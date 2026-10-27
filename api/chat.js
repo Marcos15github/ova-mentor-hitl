@@ -102,6 +102,8 @@ export default async function handler(req, res) {
   const texto = recortar(enmascararDatos(body.texto || ''), 4000);
   const historial = Array.isArray(body.historial) ? body.historial.slice(-16) : [];
   const contexto = typeof body.contexto === 'object' && body.contexto ? body.contexto : {};
+  // Las preguntas sobre notas siempre se escalan al docente, aunque el modelo no lo marque.
+  const preguntaNota = /(\bnotas?\b|calific|cu[aá]nto (me )?(voy a )?sac)/i.test(texto);
 
   const partes = [{
     text: [bloqueContexto(contexto), instruccionAccion(accion, contexto),
@@ -164,6 +166,7 @@ export default async function handler(req, res) {
   // 1) Los dos primeros modelos compiten en paralelo: gana la primera respuesta válida.
   try {
     const { data, modelo } = await Promise.any(modelos.slice(0, 2).map((m) => intentar(m, Math.min(24_000, restante()))));
+    if (preguntaNota) data.escalar_docente = true;
     return res.status(200).json({ ok: true, data, modelo, ms: Date.now() - inicio, intentos });
   } catch (agg) {
     const errores = agg.errors || [agg];
@@ -175,6 +178,7 @@ export default async function handler(req, res) {
     if (restante() < 4_000) { ultimoError = 'Se agotó el tiempo de espera de los modelos.'; break; }
     try {
       const { data } = await intentar(modelo, Math.min(20_000, restante()));
+      if (preguntaNota) data.escalar_docente = true;
       return res.status(200).json({ ok: true, data, modelo, ms: Date.now() - inicio, intentos });
     } catch (e) {
       ultimoError = e.message;
