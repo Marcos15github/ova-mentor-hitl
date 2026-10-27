@@ -9,6 +9,6 @@ export default function handler(req, res) {
     ia: Boolean(process.env.GEMINI_API_KEY),
     modelo: process.env.GEMINI_MODEL || 'gemini-3.6-flash y gemini-3.5-flash-lite en paralelo, con respaldo automático',
     firebase: Boolean(leerFirebaseConfig(process.env.FIREBASE_CONFIG)),
-    version: '1.1.0'
+    version: '1.2.0'
   });
 }
