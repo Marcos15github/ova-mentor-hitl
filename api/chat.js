@@ -126,6 +126,7 @@ export default async function handler(req, res) {
     .filter((m, i, a) => a.indexOf(m) === i);
   const inicio = Date.now();
   let ultimoError = 'Sin respuesta del modelo.';
+  const intentos = [];
 
   for (const modelo of modelos) {
     try {
@@ -140,14 +141,15 @@ export default async function handler(req, res) {
         }
         const data = normalizar(extraerJSON(txt));
         if (!data.respuesta) { ultimoError = 'Respuesta sin contenido.'; continue; }
-        return res.status(200).json({ ok: true, data, modelo, ms: Date.now() - inicio });
+        return res.status(200).json({ ok: true, data, modelo, ms: Date.now() - inicio, intentos });
       }
       ultimoError = datos?.error?.message || `Error ${status}`;
+      intentos.push({ modelo, status, motivo: String(datos?.error?.status || '').slice(0, 40) });
       // 400 de esquema/parámetro, 404 modelo inexistente, 429 cuota, 5xx: se intenta el siguiente.
       if (status === 401 || status === 403) break;
     } catch (e) {
       ultimoError = e.name === 'AbortError' ? 'El modelo tardó demasiado en responder.' : e.message;
     }
   }
-  return res.status(502).json({ ok: false, code: 'MODELO', error: ultimoError });
+  return res.status(502).json({ ok: false, code: 'MODELO', error: ultimoError, intentos });
 }
