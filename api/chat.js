@@ -42,9 +42,9 @@ function construirContenidos(historial, ultimoTurno) {
   return turnos;
 }
 
-async function llamarGemini(modelo, clave, cuerpo) {
+async function llamarGemini(modelo, clave, cuerpo, limiteMs = 22_000) {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 25_000);
+  const t = setTimeout(() => ctrl.abort(), Math.max(1_000, limiteMs));
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
       method: 'POST',
@@ -128,11 +128,15 @@ export default async function handler(req, res) {
   let ultimoError = 'Sin respuesta del modelo.';
   const intentos = [];
 
+  const PRESUPUESTO_MS = 52_000; // la función tiene 60 s como máximo en Vercel
   for (const modelo of modelos) {
+    const restante = PRESUPUESTO_MS - (Date.now() - inicio);
+    if (restante < 4_000) { ultimoError = 'Se agotó el tiempo de espera de los modelos.'; break; }
+    const limite = Math.min(22_000, restante);
     try {
       // Razonamiento bajo para responder más rápido; si el modelo no acepta el parámetro, se reintenta sin él.
-      let { status, datos } = await llamarGemini(modelo, clave, { ...cuerpo, generationConfig: { ...cuerpo.generationConfig, thinkingConfig: { thinkingLevel: 'low' } } });
-      if (status === 400 && /thinking/i.test(datos?.error?.message || '')) ({ status, datos } = await llamarGemini(modelo, clave, cuerpo));
+      let { status, datos } = await llamarGemini(modelo, clave, { ...cuerpo, generationConfig: { ...cuerpo.generationConfig, thinkingConfig: { thinkingLevel: 'low' } } }, limite);
+      if (status === 400 && /thinking/i.test(datos?.error?.message || '')) ({ status, datos } = await llamarGemini(modelo, clave, cuerpo, PRESUPUESTO_MS - (Date.now() - inicio)));
       if (status === 200) {
         const cand = datos.candidates?.[0];
         const txt = cand?.content?.parts?.map((p) => p.text || '').join('') || '';
@@ -151,6 +155,7 @@ export default async function handler(req, res) {
       if (status === 401 || status === 403) break;
     } catch (e) {
       ultimoError = e.name === 'AbortError' ? 'El modelo tardó demasiado en responder.' : e.message;
+      intentos.push({ modelo, status: 0, motivo: e.name === 'AbortError' ? 'TIEMPO' : 'RED' });
     }
   }
   return res.status(502).json({ ok: false, code: 'MODELO', error: ultimoError, intentos });
